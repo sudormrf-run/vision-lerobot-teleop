@@ -4,6 +4,15 @@
 <dict>
 	<key>NSHandsTrackingUsageDescription</key>
 	<string>This app uses hand tracking to control the robot teleoperator.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs local network access to send hand tracking data to the robot controller.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>

@@ -35,6 +35,14 @@ struct HandTrackingSystem: System {
                 self.latestRightHand = anchorUpdate.anchor
                 HandTrackingData.shared.updateHand(anchor: anchorUpdate.anchor, chirality: .right)
             }
+            
+            // Send both hands data via WebSocket
+            if WebSocketManager.shared.connectionState == .connected {
+                WebSocketManager.shared.sendBothHands(
+                    left: HandTrackingData.shared.leftHand.isTracked ? HandTrackingData.shared.leftHand : nil,
+                    right: HandTrackingData.shared.rightHand.isTracked ? HandTrackingData.shared.rightHand : nil
+                )
+            }
         }
     }
     

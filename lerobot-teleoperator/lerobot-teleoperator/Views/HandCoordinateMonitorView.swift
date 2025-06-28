@@ -112,7 +112,7 @@ struct HandCoordinateMonitorView: View {
                 .background(Color.black.opacity(0.7))
             }
         }
-        .frame(width: 400, height: 600)
+        .frame(width: 420, height: 600)
         .background(Color.black.opacity(0.9))
         .cornerRadius(20)
     }
@@ -167,7 +167,7 @@ struct JointDetailRow: View {
                 .frame(width: 100, alignment: .leading)
             
             if joint.isTracked {
-                HStack(spacing: 15) {
+                HStack(spacing: 20) {
                     CoordinateLabel(axis: "X", value: joint.position.x, color: .red)
                     CoordinateLabel(axis: "Y", value: joint.position.y, color: .green)
                     CoordinateLabel(axis: "Z", value: joint.position.z, color: .blue)
