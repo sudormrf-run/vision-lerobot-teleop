@@ -11,6 +11,7 @@ import random
 import argparse
 import logging
 from datetime import datetime
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,15 +27,15 @@ class HandTrackingClient:
         joints = []
         base_x = -0.1 if is_left else 0.1
         
-        # Generate 27 joint positions with some random movement
-        for i in range(27):
+        # Generate 26 joint positions with some random movement
+        for i in range(26):
             x = base_x + random.uniform(-0.02, 0.02)
             y = 0.5 + (i * 0.01) + random.uniform(-0.01, 0.01)
             z = -0.3 + random.uniform(-0.02, 0.02)
             joints.append([x, y, z])
         
         # Create tracked mask (all joints tracked in this test)
-        tracked_mask = (1 << 27) - 1
+        tracked_mask = (1 << 26) - 1
         
         return {
             "joints": joints,
@@ -44,7 +45,7 @@ class HandTrackingClient:
     async def send_single_hand_message(self, websocket, is_left=True):
         """Send a single hand tracking message"""
         joints = []
-        for i in range(27):
+        for i in range(26):
             joint = {
                 "name": f"joint_{i}",
                 "position": [
@@ -137,6 +138,75 @@ class HandTrackingClient:
         except Exception as e:
             logger.error(f"Error: {e}")
             raise
+    
+    async def replay_log_file(self, log_file_path, speed_multiplier=1.0):
+        """Replay messages from a log file"""
+        log_path = Path(log_file_path)
+        if not log_path.exists():
+            logger.error(f"Log file not found: {log_path}")
+            return
+        
+        try:
+            with open(log_path, 'r') as f:
+                log_data = json.load(f)
+            
+            messages = log_data.get('messages', [])
+            if not messages:
+                logger.error("No messages found in log file")
+                return
+            
+            metadata = log_data.get('metadata', {})
+            logger.info(f"Replaying {len(messages)} messages from {log_path.name}")
+            logger.info(f"Original recording: {metadata.get('total_messages')} messages")
+            
+            async with websockets.connect(self.server_url) as websocket:
+                self.connected = True
+                logger.info(f"Connected to {self.server_url} for replay")
+                
+                # Start receiving messages in background
+                receive_task = asyncio.create_task(self.receive_messages(websocket))
+                
+                # Calculate time differences between messages
+                start_time = time.time()
+                first_msg_time = messages[0]['data']['timestamp'] if messages else 0
+                
+                for i, msg_record in enumerate(messages):
+                    msg_data = msg_record['data']
+                    original_timestamp = msg_data['timestamp']
+                    
+                    # Calculate delay based on original timing
+                    if i > 0:
+                        time_diff = original_timestamp - prev_timestamp
+                        adjusted_delay = time_diff / speed_multiplier
+                        await asyncio.sleep(adjusted_delay)
+                    
+                    # Update timestamp to current time
+                    msg_data['timestamp'] = time.time()
+                    
+                    # Send the message
+                    await websocket.send(json.dumps(msg_data))
+                    self.message_count += 1
+                    
+                    # Log progress
+                    if self.message_count % 100 == 0:
+                        elapsed = time.time() - start_time
+                        progress = (i + 1) / len(messages) * 100
+                        logger.info(f"Replay progress: {progress:.1f}% ({self.message_count} messages sent in {elapsed:.1f}s)")
+                    
+                    prev_timestamp = original_timestamp
+                
+                self.connected = False
+                await receive_task
+                
+                total_time = time.time() - start_time
+                logger.info(f"Replay completed: {self.message_count} messages in {total_time:.1f}s")
+                logger.info(f"Average rate: {self.message_count / total_time:.1f} messages/second")
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse log file: {e}")
+        except Exception as e:
+            logger.error(f"Replay error: {e}")
+            raise
 
 async def stress_test(server_url, num_clients=5, duration=10):
     """Run multiple clients simultaneously for stress testing"""
@@ -161,19 +231,34 @@ def main():
     parser.add_argument("--rate", type=int, default=30, help="Message rate per second")
     parser.add_argument("--stress", action="store_true", help="Run stress test with multiple clients")
     parser.add_argument("--clients", type=int, default=5, help="Number of clients for stress test")
+    parser.add_argument("--replay", type=str, help="Replay messages from a log file")
+    parser.add_argument("--speed", type=float, default=1.0, help="Replay speed multiplier (2.0 = 2x speed)")
     
     args = parser.parse_args()
     
-    logger.info(f"WebSocket Client Test")
-    logger.info(f"Server: {args.server}")
-    logger.info(f"Mode: {args.mode}")
-    logger.info(f"Duration: {args.duration}s")
-    logger.info(f"Rate: {args.rate} msg/s")
+    client = HandTrackingClient(args.server)
     
-    if args.stress:
+    if args.replay:
+        # Replay mode
+        logger.info(f"WebSocket Client - Replay Mode")
+        logger.info(f"Server: {args.server}")
+        logger.info(f"Log file: {args.replay}")
+        logger.info(f"Speed: {args.speed}x")
+        asyncio.run(client.replay_log_file(args.replay, args.speed))
+    elif args.stress:
+        # Stress test mode
+        logger.info(f"WebSocket Client - Stress Test")
+        logger.info(f"Server: {args.server}")
+        logger.info(f"Clients: {args.clients}")
+        logger.info(f"Duration: {args.duration}s")
         asyncio.run(stress_test(args.server, args.clients, args.duration))
     else:
-        client = HandTrackingClient(args.server)
+        # Normal test mode
+        logger.info(f"WebSocket Client Test")
+        logger.info(f"Server: {args.server}")
+        logger.info(f"Mode: {args.mode}")
+        logger.info(f"Duration: {args.duration}s")
+        logger.info(f"Rate: {args.rate} msg/s")
         asyncio.run(client.run_test(args.mode, args.duration, args.rate))
 
 if __name__ == "__main__":

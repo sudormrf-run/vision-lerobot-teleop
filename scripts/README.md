@@ -55,6 +55,40 @@ Once connected, you should see:
 - Log messages in the terminal showing received hand tracking data
 - Message count increasing in the WebSocket Control panel
 
+## Logging and Replay
+
+### Recording Hand Tracking Data
+
+To record Vision Pro hand tracking data for later replay:
+
+```bash
+python3 websocket_server.py --log --verbose
+```
+
+This will:
+- Save all received messages to `logs/hand_tracking_YYYYMMDD_HHMMSS.json`
+- Display all 26 joint coordinates (use without `--verbose` for compact output)
+
+### Replaying Recorded Data
+
+To replay recorded hand tracking data:
+
+```bash
+# Replay at normal speed
+python3 websocket_client_test.py --replay logs/hand_tracking_20240628_143022.json
+
+# Replay at 2x speed
+python3 websocket_client_test.py --replay logs/hand_tracking_20240628_143022.json --speed 2.0
+
+# Replay to a different server
+python3 websocket_client_test.py --server ws://192.168.1.100:8765 --replay logs/hand_tracking_20240628_143022.json
+```
+
+This allows you to:
+- Test robot control code without needing Vision Pro
+- Debug specific hand movements
+- Create reproducible test scenarios
+
 ## Data Format
 
 The server receives JSON messages with hand joint positions:
@@ -62,7 +96,7 @@ The server receives JSON messages with hand joint positions:
 {
   "timestamp": 1234567890.123,
   "leftHand": {
-    "joints": [[x, y, z], ...],  // 27 joints
+    "joints": [[x, y, z], ...],  // 26 joints
     "trackedMask": 134217727     // Bit mask for tracked joints
   },
   "rightHand": {

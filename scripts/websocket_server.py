@@ -8,15 +8,46 @@ import websockets
 import json
 import logging
 from datetime import datetime
+import os
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class HandTrackingServer:
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, log_to_file=False, log_dir="logs"):
         self.clients = set()
         self.message_count = 0
         self.verbose = verbose  # Set to False for less detailed output
+        self.log_to_file = log_to_file
+        self.log_dir = Path(log_dir)
+        self.log_file = None
+        self.log_data = []
+        
+        if self.log_to_file:
+            self._setup_logging()
+    
+    def _setup_logging(self):
+        """Setup logging directory and file"""
+        self.log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = self.log_dir / f"hand_tracking_{timestamp}.json"
+        logger.info(f"Logging enabled. Data will be saved to: {self.log_file}")
+        
+    def _save_logs(self):
+        """Save accumulated log data to file"""
+        if self.log_to_file and self.log_data:
+            with open(self.log_file, 'w') as f:
+                json.dump({
+                    "metadata": {
+                        "start_time": self.log_data[0]["timestamp"] if self.log_data else None,
+                        "end_time": self.log_data[-1]["timestamp"] if self.log_data else None,
+                        "total_messages": len(self.log_data),
+                        "version": "1.0"
+                    },
+                    "messages": self.log_data
+                }, f, indent=2)
+            logger.info(f"Saved {len(self.log_data)} messages to {self.log_file}")
         
     async def register(self, websocket):
         self.clients.add(websocket)
@@ -31,6 +62,14 @@ class HandTrackingServer:
             data = json.loads(message)
             self.message_count += 1
             
+            # Store raw message for logging
+            if self.log_to_file:
+                self.log_data.append({
+                    "message_id": self.message_count,
+                    "received_at": datetime.now().timestamp(),
+                    "data": data
+                })
+            
             # Log basic info
             timestamp = datetime.fromtimestamp(data.get('timestamp', 0))
             logger.info(f"Message #{self.message_count} at {timestamp.strftime('%H:%M:%S.%f')[:-3]}")
@@ -41,10 +80,10 @@ class HandTrackingServer:
                 right_joints = len(data.get('rightHand', {}).get('joints', [])) if data.get('rightHand') else 0
                 logger.info(f"  Left hand: {left_joints} joints, Right hand: {right_joints} joints")
                 
-                # Define expected joint names in order (27 joints total)
+                # Define expected joint names in order (26 joints total - thumb has no metacarpal in ARKit)
                 joint_names = [
-                    # Thumb (5 joints)
-                    "thumb.metacarpal", "thumb.knuckle", "thumb.intermediateBase", "thumb.intermediateTip", "thumb.tip",
+                    # Thumb (4 joints - no metacarpal)
+                    "thumb.knuckle", "thumb.intermediateBase", "thumb.intermediateTip", "thumb.tip",
                     # Index (5 joints)
                     "index.metacarpal", "index.knuckle", "index.intermediateBase", "index.intermediateTip", "index.tip",
                     # Middle (5 joints)
@@ -62,7 +101,7 @@ class HandTrackingServer:
                     # Log all joints data
                     if data.get('leftHand') and left_joints > 0:
                         logger.info("  Left hand joints received:")
-                        # Print all 27 joints
+                        # Print all 26 joints
                         for i in range(left_joints):
                             if i < len(data['leftHand']['joints']):
                                 joint = data['leftHand']['joints'][i]
@@ -79,10 +118,10 @@ class HandTrackingServer:
                                 logger.info(f"    [{i:2d}] {joint_name:25s}: x={joint[0]:7.3f}, y={joint[1]:7.3f}, z={joint[2]:7.3f}")
                 else:
                     # Compact output - just show key joints
-                    if data.get('leftHand') and left_joints > 25:
-                        wrist = data['leftHand']['joints'][25]
-                        thumb_tip = data['leftHand']['joints'][4]
-                        index_tip = data['leftHand']['joints'][9]
+                    if data.get('leftHand') and left_joints > 24:
+                        wrist = data['leftHand']['joints'][24]  # wrist is at index 24 (25th joint)
+                        thumb_tip = data['leftHand']['joints'][3]  # thumb tip is at index 3 (4th joint)
+                        index_tip = data['leftHand']['joints'][8]  # index tip is at index 8 (9th joint)
                         logger.info(f"  Left - Wrist: ({wrist[0]:.3f}, {wrist[1]:.3f}, {wrist[2]:.3f}), " +
                                   f"Thumb tip: ({thumb_tip[0]:.3f}, {thumb_tip[1]:.3f}, {thumb_tip[2]:.3f}), " +
                                   f"Index tip: ({index_tip[0]:.3f}, {index_tip[1]:.3f}, {index_tip[2]:.3f})")
@@ -91,7 +130,7 @@ class HandTrackingServer:
                 if 'trackedMask' in data.get('leftHand', {}):
                     mask = data['leftHand']['trackedMask']
                     tracked_count = bin(mask).count('1')
-                    logger.info(f"  Left hand tracked joints: {tracked_count}/27 (mask: {mask:027b})")
+                    logger.info(f"  Left hand tracked joints: {tracked_count}/26 (mask: {mask:026b})")
             
             # Echo back a confirmation
             response = {
@@ -117,12 +156,26 @@ class HandTrackingServer:
             await self.unregister(websocket)
 
 async def main():
-    # Set verbose=True to see all 27 joints, False for compact output
-    server = HandTrackingServer(verbose=True)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='WebSocket server for Vision Pro hand tracking')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Show all joint details')
+    parser.add_argument('--log', '-l', action='store_true', help='Log messages to file')
+    parser.add_argument('--log-dir', default='logs', help='Directory for log files (default: logs)')
+    parser.add_argument('--port', '-p', type=int, default=8765, help='Port to listen on (default: 8765)')
+    
+    args = parser.parse_args()
+    
+    # Create server with options
+    server = HandTrackingServer(
+        verbose=args.verbose,
+        log_to_file=args.log,
+        log_dir=args.log_dir
+    )
     
     # Start server - listen on all interfaces
     host = "0.0.0.0"  # Listen on all available interfaces
-    port = 8765
+    port = args.port
     
     # Get local IP addresses
     import socket
@@ -151,9 +204,15 @@ async def main():
     else:
         logger.info(f"Could not determine local IP. Use 'ifconfig' or 'ip addr' to find your IP address")
     logger.info("Press Ctrl+C to stop")
+    if server.log_to_file:
+        logger.info(f"Logging enabled - data will be saved to {server.log_dir}")
     
-    async with websockets.serve(server.handle_client, host, port):
-        await asyncio.Future()  # Run forever
+    try:
+        async with websockets.serve(server.handle_client, host, port):
+            await asyncio.Future()  # Run forever
+    finally:
+        # Save logs when server stops
+        server._save_logs()
 
 if __name__ == "__main__":
     try:
