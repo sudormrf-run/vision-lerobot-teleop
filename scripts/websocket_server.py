@@ -13,9 +13,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class HandTrackingServer:
-    def __init__(self):
+    def __init__(self, verbose=True):
         self.clients = set()
         self.message_count = 0
+        self.verbose = verbose  # Set to False for less detailed output
         
     async def register(self, websocket):
         self.clients.add(websocket)
@@ -40,14 +41,57 @@ class HandTrackingServer:
                 right_joints = len(data.get('rightHand', {}).get('joints', [])) if data.get('rightHand') else 0
                 logger.info(f"  Left hand: {left_joints} joints, Right hand: {right_joints} joints")
                 
-                # Example: Extract palm position (wrist joint - typically index 24)
-                if data.get('leftHand') and left_joints > 24:
-                    left_wrist = data['leftHand']['joints'][24]
-                    logger.info(f"  Left wrist position: x={left_wrist[0]:.3f}, y={left_wrist[1]:.3f}, z={left_wrist[2]:.3f}")
+                # Define expected joint names in order (27 joints total)
+                joint_names = [
+                    # Thumb (5 joints)
+                    "thumb.metacarpal", "thumb.knuckle", "thumb.intermediateBase", "thumb.intermediateTip", "thumb.tip",
+                    # Index (5 joints)
+                    "index.metacarpal", "index.knuckle", "index.intermediateBase", "index.intermediateTip", "index.tip",
+                    # Middle (5 joints)
+                    "middle.metacarpal", "middle.knuckle", "middle.intermediateBase", "middle.intermediateTip", "middle.tip",
+                    # Ring (5 joints)
+                    "ring.metacarpal", "ring.knuckle", "ring.intermediateBase", "ring.intermediateTip", "ring.tip",
+                    # Little (5 joints)
+                    "little.metacarpal", "little.knuckle", "little.intermediateBase", "little.intermediateTip", "little.tip",
+                    # Forearm (2 joints)
+                    "forearm.wrist", "forearm.arm"
+                ]
                 
-                if data.get('rightHand') and right_joints > 24:
-                    right_wrist = data['rightHand']['joints'][24]
-                    logger.info(f"  Right wrist position: x={right_wrist[0]:.3f}, y={right_wrist[1]:.3f}, z={right_wrist[2]:.3f}")
+                # Log joints data based on verbosity
+                if self.verbose:
+                    # Log all joints data
+                    if data.get('leftHand') and left_joints > 0:
+                        logger.info("  Left hand joints received:")
+                        # Print all 27 joints
+                        for i in range(left_joints):
+                            if i < len(data['leftHand']['joints']):
+                                joint = data['leftHand']['joints'][i]
+                                joint_name = joint_names[i] if i < len(joint_names) else f"joint_{i}"
+                                logger.info(f"    [{i:2d}] {joint_name:25s}: x={joint[0]:7.3f}, y={joint[1]:7.3f}, z={joint[2]:7.3f}")
+                    
+                    # Same for right hand
+                    if data.get('rightHand') and right_joints > 0:
+                        logger.info("  Right hand joints received:")
+                        for i in range(right_joints):
+                            if i < len(data['rightHand']['joints']):
+                                joint = data['rightHand']['joints'][i]
+                                joint_name = joint_names[i] if i < len(joint_names) else f"joint_{i}"
+                                logger.info(f"    [{i:2d}] {joint_name:25s}: x={joint[0]:7.3f}, y={joint[1]:7.3f}, z={joint[2]:7.3f}")
+                else:
+                    # Compact output - just show key joints
+                    if data.get('leftHand') and left_joints > 25:
+                        wrist = data['leftHand']['joints'][25]
+                        thumb_tip = data['leftHand']['joints'][4]
+                        index_tip = data['leftHand']['joints'][9]
+                        logger.info(f"  Left - Wrist: ({wrist[0]:.3f}, {wrist[1]:.3f}, {wrist[2]:.3f}), " +
+                                  f"Thumb tip: ({thumb_tip[0]:.3f}, {thumb_tip[1]:.3f}, {thumb_tip[2]:.3f}), " +
+                                  f"Index tip: ({index_tip[0]:.3f}, {index_tip[1]:.3f}, {index_tip[2]:.3f})")
+                
+                # Check tracked joints using bitmask
+                if 'trackedMask' in data.get('leftHand', {}):
+                    mask = data['leftHand']['trackedMask']
+                    tracked_count = bin(mask).count('1')
+                    logger.info(f"  Left hand tracked joints: {tracked_count}/27 (mask: {mask:027b})")
             
             # Echo back a confirmation
             response = {
@@ -62,7 +106,7 @@ class HandTrackingServer:
         except Exception as e:
             logger.error(f"Error handling message: {e}")
             
-    async def handle_client(self, websocket, path):
+    async def handle_client(self, websocket):
         await self.register(websocket)
         try:
             async for message in websocket:
@@ -73,7 +117,8 @@ class HandTrackingServer:
             await self.unregister(websocket)
 
 async def main():
-    server = HandTrackingServer()
+    # Set verbose=True to see all 27 joints, False for compact output
+    server = HandTrackingServer(verbose=True)
     
     # Start server - listen on all interfaces
     host = "0.0.0.0"  # Listen on all available interfaces

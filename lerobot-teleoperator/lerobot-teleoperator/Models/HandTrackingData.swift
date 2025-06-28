@@ -35,6 +35,7 @@ class HandTrackingData {
                     isTracked: skeleton.joint(joint.0).isTracked
                 )
             }
+            print("HandTrackingData: Updated \(chirality) hand with \(handData.joints.count) joints (expected 27)")
         }
         
         if chirality == .left {

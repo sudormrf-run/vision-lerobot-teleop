@@ -2,6 +2,8 @@ import ARKit.hand_skeleton
 
 struct Hand {
     static let joints: [(HandSkeleton.JointName, Finger, Bone)] = [
+        // Thumb (5 joints including metacarpal)
+        (.thumbMetacarpal, .thumb, .metacarpal),
         (.thumbKnuckle, .thumb, .knuckle),
         (.thumbIntermediateBase, .thumb, .intermediateBase),
         (.thumbIntermediateTip, .thumb, .intermediateTip),

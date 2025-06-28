@@ -35,7 +35,7 @@ class WebSocketManager: NSObject {
     var lastMessageTime: Date?
     
     // Configuration
-    var serverAddress: String = "ws://192.168.1.100:8765" {  // Replace with your computer's IP
+    var serverAddress: String = "ws://192.168.0.118:8765" {  // Replace with your computer's IP
         didSet {
             if connectionState == .connected {
                 disconnect()
