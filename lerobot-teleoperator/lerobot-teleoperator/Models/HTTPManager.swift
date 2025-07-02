@@ -32,12 +32,18 @@ class HTTPManager: NSObject {
     var lastError: String?
     var messagesSent: Int = 0
     var lastMessageTime: Date?
+    var isActive: Bool = false
     
     // Configuration
     var serverAddress: String = "http://192.168.0.118:1049" {  // Replace with your computer's IP
         didSet {
             updateServerURL()
         }
+    }
+    var targetHz: Double = 50.0  // Target frequency in Hz
+    private var lastSendTime: Date = Date()
+    private var minSendInterval: TimeInterval {
+        return 1.0 / targetHz
     }
     
     override init() {
@@ -84,6 +90,16 @@ class HTTPManager: NSObject {
     }
     
     func sendBothHands(left: HandTrackingData.HandData?, right: HandTrackingData.HandData?) {
+        // Check if we're active
+        guard isActive else { return }
+        
+        // Check Hz throttling
+        let now = Date()
+        let timeSinceLastSend = now.timeIntervalSince(lastSendTime)
+        if timeSinceLastSend < minSendInterval {
+            return
+        }
+        
         guard let baseURL = serverURL else {
             connectionState = .failed(NSError(domain: "HTTP", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid server URL"]))
             return
@@ -97,6 +113,7 @@ class HTTPManager: NSObject {
             rightHand: right != nil ? HandDataCompact(from: right!) : nil
         )
         
+        lastSendTime = now
         sendMessage(message, to: url)
     }
     
@@ -173,6 +190,26 @@ class HTTPManager: NSObject {
         }
         
         task.resume()
+    }
+    
+    // MARK: - Control Methods
+    
+    func start() {
+        isActive = true
+        connectionState = .idle
+        lastError = nil
+    }
+    
+    func stop() {
+        isActive = false
+    }
+    
+    func reset() {
+        isActive = false
+        connectionState = .idle
+        lastError = nil
+        messagesSent = 0
+        lastMessageTime = nil
     }
     
     // Singleton

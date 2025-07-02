@@ -36,17 +36,11 @@ struct HandTrackingSystem: System {
                 HandTrackingData.shared.updateHand(anchor: anchorUpdate.anchor, chirality: .right)
             }
             
-            // Send both hands data via HTTP
-            switch HTTPManager.shared.connectionState {
-            case .idle, .sending, .success:
-                HTTPManager.shared.sendBothHands(
-                    left: HandTrackingData.shared.leftHand.isTracked ? HandTrackingData.shared.leftHand : nil,
-                    right: HandTrackingData.shared.rightHand.isTracked ? HandTrackingData.shared.rightHand : nil
-                )
-            case .failed:
-                // Skip sending when in failed state
-                break
-            }
+            // Send both hands data via HTTP (HTTPManager will check isActive internally)
+            HTTPManager.shared.sendBothHands(
+                left: HandTrackingData.shared.leftHand.isTracked ? HandTrackingData.shared.leftHand : nil,
+                right: HandTrackingData.shared.rightHand.isTracked ? HandTrackingData.shared.rightHand : nil
+            )
         }
     }
     
