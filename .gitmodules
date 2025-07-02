@@ -1,3 +1,4 @@
 [submodule "lerobot"]
 	path = lerobot
-	url = https://github.com/jonhpark7966/lerobot.git
+	url = https://github.com/sudormrf-run/lerobot.git
+	branch = feat/add-visionpro-teleop
