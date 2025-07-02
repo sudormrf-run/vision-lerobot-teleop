@@ -12,7 +12,7 @@ import RealityKitContent
 struct ContentView: View {
     @State private var showDebugView = false
     @State private var showMonitorView = false
-    @State private var showWebSocketControl = false
+    @State private var showHTTPControl = false
 
     var body: some View {
         ZStack {
@@ -32,7 +32,7 @@ struct ContentView: View {
                             .toggleStyle(.button)
                     }
                     
-                    Toggle("WebSocket Control", isOn: $showWebSocketControl)
+                    Toggle("HTTP Control", isOn: $showHTTPControl)
                         .toggleStyle(.button)
                 }
                 .padding(.top)
@@ -42,9 +42,9 @@ struct ContentView: View {
             // Overlays positioned absolutely
             VStack {
                 HStack {
-                    // WebSocket Control - Top Left
-                    if showWebSocketControl {
-                        WebSocketControlView()
+                    // HTTP Control - Top Left
+                    if showHTTPControl {
+                        HTTPControlView()
                             .transition(.move(edge: .leading).combined(with: .opacity))
                     }
                     
@@ -62,7 +62,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut, value: showMonitorView)
-        .animation(.easeInOut, value: showWebSocketControl)
+        .animation(.easeInOut, value: showHTTPControl)
     }
 }
 
