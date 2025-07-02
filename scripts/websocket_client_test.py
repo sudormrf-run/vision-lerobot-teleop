@@ -168,11 +168,11 @@ class HandTrackingClient:
                 
                 # Calculate time differences between messages
                 start_time = time.time()
-                first_msg_time = messages[0]['data']['timestamp'] if messages else 0
+                first_msg_time = messages[0]['received_at'] if messages else 0
                 
                 for i, msg_record in enumerate(messages):
                     msg_data = msg_record['data']
-                    original_timestamp = msg_data['timestamp']
+                    original_timestamp = msg_record['received_at']  # Use received_at from log
                     
                     # Calculate delay based on original timing
                     if i > 0:
@@ -180,7 +180,7 @@ class HandTrackingClient:
                         adjusted_delay = time_diff / speed_multiplier
                         await asyncio.sleep(adjusted_delay)
                     
-                    # Update timestamp to current time
+                    # Add timestamp to message data (Vision Pro format)
                     msg_data['timestamp'] = time.time()
                     
                     # Send the message

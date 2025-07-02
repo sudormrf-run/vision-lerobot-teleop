@@ -36,18 +36,21 @@ class HandTrackingServer:
         
     def _save_logs(self):
         """Save accumulated log data to file"""
-        if self.log_to_file and self.log_data:
-            with open(self.log_file, 'w') as f:
-                json.dump({
-                    "metadata": {
-                        "start_time": self.log_data[0]["timestamp"] if self.log_data else None,
-                        "end_time": self.log_data[-1]["timestamp"] if self.log_data else None,
-                        "total_messages": len(self.log_data),
-                        "version": "1.0"
-                    },
-                    "messages": self.log_data
-                }, f, indent=2)
-            logger.info(f"Saved {len(self.log_data)} messages to {self.log_file}")
+        if self.log_to_file:
+            if self.log_data:
+                with open(self.log_file, 'w') as f:
+                    json.dump({
+                        "metadata": {
+                            "start_time": self.log_data[0]["received_at"] if self.log_data else None,
+                            "end_time": self.log_data[-1]["received_at"] if self.log_data else None,
+                            "total_messages": len(self.log_data),
+                            "version": "1.0"
+                        },
+                        "messages": self.log_data
+                    }, f, indent=2)
+                logger.info(f"Saved {len(self.log_data)} messages to {self.log_file}")
+            else:
+                logger.info(f"No messages received - empty log file created at {self.log_file}")
         
     async def register(self, websocket):
         self.clients.add(websocket)
